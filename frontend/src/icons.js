@@ -1,0 +1,27 @@
+const paths={
+  logo:'<path d="m2 18 7-12 4 7 3-5 6 10H2Z"/><path d="m6.7 10 2.3 2 2.2-2m4.2 1 1 1 1.1-.8"/>',
+  brake:'<circle cx="12" cy="12" r="7"/><path d="M12 8v5m0 2v1M4.2 5.4a10.3 10.3 0 0 0 0 13.2m15.6-13.2a10.3 10.3 0 0 1 0 13.2"/>',
+  wear:'<path d="m14 6 4-4 3 3-4 4 1 4-4 4-4-1-5 5-3-3 5-5-1-4 4-4z"/>',
+  wind:'<path d="M3 8h12a3 3 0 1 0-3-3M2 12h17a2 2 0 1 1-2 2M4 16h7a3 3 0 1 1-3 3"/>',
+  sensors:'<path d="M2 12h4l3-7 5 14 3-7h5"/>',
+  solvers:'<path d="M4 18V9m5 9V5m5 13v-7m5 7V3M2 21h20"/>',
+  condition:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M7 10.5h7m-3.5-3v6"/>',
+  history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5m4-1v5l3 2"/>',
+  layers:'<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8v.1"/>',
+  play:'<path d="M8 5v14l11-7Z" fill="currentColor" stroke="none"/>',
+  pause:'<path d="M9 5v14m6-14v14" stroke-width="3"/>',
+  reset:'<path d="M3 12a9 9 0 1 1 3 6.7M3 12V5m0 7h7"/>',
+  arrow:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+  point:'<circle cx="12" cy="12" r="6"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>',
+  save:'<path d="M4 4h13l3 3v13H4zM8 4v6h8V4M8 20v-6h8v6"/>',
+  download:'<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>',
+  moon:'<path d="M20 14a8 8 0 0 1-10-10 9 9 0 1 0 10 10Z"/>',
+  settings:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2" fill="#14202a"/><circle cx="15" cy="12" r="2" fill="#14202a"/><circle cx="10" cy="18" r="2" fill="#14202a"/>',
+  chevron:'<path d="m8 10 4 4 4-4"/>',
+  close:'<path d="m6 6 12 12M6 18 18 6"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v6l3 2"/>',
+  route:'<path d="M5 5h12a4 4 0 0 1 0 8H7a3 3 0 0 0 0 6h12"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/>',
+  gauge:'<path d="M5 18a9 9 0 1 1 14 0H5Zm7-3 4-5"/>'
+};
+export const icon=(key,size=18)=>`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[key]??''}</svg>`;
