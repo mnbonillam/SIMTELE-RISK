@@ -42,7 +42,7 @@ export async function saveRun({module,scenario,params,result}) {
   tx.objectStore('simulacion').add({id,escenario_id:scenarioId,fecha:new Date().toISOString(),estado:'calculada',tiempo_ms:timeMs,visual});
   methods.forEach((m,i)=>{
     const eid=id+'-'+i;
-    tx.objectStore('ejecucion_metodo').add({id:eid,simulacion_id:id,orden:i,metodo:m.name,tolerancia:m.tolerance,paso:m.step,max_iter:m.max,convergio:m.converged,tiempo_ms:m.timeMs??null});
+    tx.objectStore('ejecucion_metodo').add({id:eid,simulacion_id:id,orden:i,metodo:m.name,tolerancia:m.tolerance,paso:m.step,criterio:m.criterion??null,max_iter:m.max,convergio:m.converged,tiempo_ms:m.timeMs??null});
     m.rows.forEach((row,j)=>tx.objectStore('iteracion_resultado').add({
       id:eid+'-'+j,ejecucion_id:eid,numero:row.k,aproximacion_json:row.value,residual:row.res??null,
       error_abs:row.abs??null,error_rel:row.rel??null,datos_json:row
@@ -80,7 +80,7 @@ export async function loadRun(id) {
       read(child.objectStore('resultado_resumen').get(m.id))
     ]);
     return {name:m.metodo,rows:iterations.sort((a,b)=>a.numero-b.numero).map(i=>i.datos_json),tolerance:m.tolerancia,step:m.paso,max:m.max_iter,
-      converged:m.convergio,reference:summary.referencia,value:summary.valor_json,metrics:summary.metrica_error_json,interpretation:summary.interpretacion,timeMs:m.tiempo_ms};
+      converged:m.convergio,reference:summary.referencia,value:summary.valor_json,metrics:summary.metrica_error_json,interpretation:summary.interpretacion,criterion:m.criterio??null,timeMs:m.tiempo_ms};
   }));
   return {id,date:run.fecha,module:s.caso_id,scenario:s.tipo,params:s.parametros_json,result:{...run.visual,methods,timeMs:run.tiempo_ms}};
 }

@@ -1,6 +1,6 @@
-import {errors, integrateODE, rkStep, root, solveIterative, lu, residual, lagrange, spline, newtonInterpolation, quadrature} from './numerics.js';
+import {errors, integrateODE, rkStep, root, solveIterative, lu, residual, matvec, lagrange, spline, newtonInterpolation, quadrature} from './numerics.js';
 
-export const MODEL_VERSION = '1.0.0';
+export const MODEL_VERSION = '1.1.0';
 export const TYPES = ['NORMAL', 'ESTRÉS', 'MAL CONDICIONADO'];
 export const MODULES = {
   brake: {title:'Detención de emergencia', short:'Detención', subtitle:'Cinemática de frenado con desaceleración constante.', equation:'dv/dt = −a    ·    dx/dt = v', unit:'s'},
@@ -15,10 +15,10 @@ export function defaults(module, scenario) {
   const stress = scenario === 'ESTRÉS';
   const ill = scenario === 'MAL CONDICIONADO';
   return {
-    brake: {v0:stress ? 12 : 10, a:stress ? 0.4 : 0.8, reaction:0, step:0.25},
+    brake: {v0:stress ? 12 : 10, a:stress ? 0.4 : 0.8, reaction:0, step:stress ? 0.5 : 0.25, tolerance:1e-10},
     wear: {initial:0.1, alpha:0.015, beta:stress ? 0.002 : 0.001, limit:0.4, tolerance:1e-10},
     wind: {m:250, c:stress ? 14 : 40, k:1000, force:stress ? 18 : 0, omega:stress ? 2 : 1.25, step:stress ? 0.65 : 0.12, amplification:10},
-    sensors: {noise:stress ? 0.12 : 0, runge:ill, count:ill ? 11 : stress ? 7 : 3, edits:{}},
+    sensors: {noise:stress ? 0.12 : 0, runge:ill, clustered:ill, count:ill ? 7 : stress ? 7 : 3, edits:{}},
     solvers: {tolerance:stress ? 1e-12 : 1e-10, max:100},
     condition: {logE:stress ? -4 : -3}
   }[module];
@@ -33,31 +33,62 @@ export function brakeAt(p, t) {
 const linspace = (a, b, n) => Array.from({length:n+1}, (_, i) => a + (b - a) * i / n);
 const series = (name, points) => ({name, points});
 function method(name, rows, options = {}) {
-  const {tolerance = null, step = null, max = null, timeMs = null, converged = null, reference = null, interpretation = '', value = rows.at(-1)?.value ?? null, metrics = rows.at(-1) ?? {}} = options;
-  return {name, rows, tolerance, step, max, timeMs, converged, reference, interpretation, value, metrics};
+  const {tolerance = null, step = null, max = null, timeMs = null, converged = null, reference = null, criterion = null, interpretation = '', value = rows.at(-1)?.value ?? null, metrics = rows.at(-1) ?? {}} = options;
+  return {name, rows, tolerance, step, max, timeMs, converged, reference, criterion, interpretation, value, metrics};
 }
 
-export function braking(p) {
-  const started = performance.now();
-  const end = p.reaction + p.v0 / p.a, distance = brakeAt(p, end).x;
-  const samples = [{t:0, y:[0,p.v0]}];
-  let t = 0, state = samples[0].y;
-  while (t < end - 1e-10) {
-    const reacting = t < p.reaction - 1e-10;
-    const next = Math.min(reacting ? p.reaction : end, t + p.step);
-    state = rkStep(4, (_, [x,v]) => [v, reacting ? 0 : -p.a], t, state, next - t);
-    t = next;
-    samples.push({t, y:state});
-  }
-  const rows = samples.map(({t,y}, k) => {
-    const prev = samples[k-1];
-    const acceleration = prev?.t < p.reaction-1e-10 ? 0 : -p.a;
-    const defect = prev ? Math.abs((y[1]-prev.y[1])/(t-prev.t)-acceleration) : 0;
-    return {k,t,value:y[0],res:defect,...errors(y[0],brakeAt(p,t).x)};
+const rootNames = ['Bisección','Secante','Newton-Raphson'];
+function roots(f, derivative, left, right, tolerance, reference) {
+  return rootNames.map(name=>{
+    const start=performance.now();
+    const r=root(name,f,derivative,left,right,tolerance,reference);
+    return method(name,r.rows,{reference,tolerance,max:100,timeMs:performance.now()-start,converged:r.converged,
+      criterion:`|f(t)| ≤ ${tolerance}. ${name==='Bisección'?'Intervalo':name==='Secante'?'Semillas':'Semilla derecha'}: ${name==='Newton-Raphson'?right:`[${left}, ${right}]`}.`});
   });
-  return {end, distance, reactionDistance:p.v0 * p.reaction, brakingDistance:p.v0 ** 2 / (2 * p.a), samples,
-    methods:[method('RK4', rows, {step:p.step, timeMs:performance.now()-started, reference:distance, interpretation:distance > 150 ? 'Supera el límite sintético de 150 m.' : 'Dentro del límite sintético de 150 m.'})],
-    lines:[series('Velocidad', linspace(0,end,180).map(t=>[t,brakeAt(p,t).v]))]};
+}
+function quadratureMethods(area, reference, unit, span, timeMs) {
+  return Object.entries(area).map(([name,list])=>{
+    const rows=list.map((row,i)=>({...row,res:i?Math.abs(row.value-list[i-1].value):null,...errors(row.value,reference)}));
+    return method(name,rows,{timeMs,step:span/list.at(-1).n,reference,
+      criterion:`Refinamiento hasta n = ${list.at(-1).n}. Residuo: diferencia entre niveles sucesivos. Resultado en ${unit}.`});
+  });
+}
+export function braking(p) {
+  const end=p.reaction+p.v0/p.a, distance=brakeAt(p,end).x;
+  const sampleSets=[];
+  const methods=[4,2].map(order=>{
+    const started=performance.now();
+    const samples=[{t:0,y:[0,p.v0]}];
+    let t=0,state=samples[0].y;
+    while(t<end-1e-10){
+      const reacting=t<p.reaction-1e-10;
+      const next=Math.min(reacting?p.reaction:end,t+p.step);
+      state=rkStep(order,(_,[x,v])=>[v,reacting?0:-p.a],t,state,next-t);
+      t=next;
+      samples.push({t,y:state});
+    }
+    sampleSets.push(samples);
+    const rows=samples.map(({t,y},k)=>{
+      const prev=samples[k-1], acceleration=prev?.t<p.reaction-1e-10?0:-p.a;
+      const defect=prev?Math.abs((y[1]-prev.y[1])/(t-prev.t)-acceleration):0;
+      return {k,t,value:y[0],velocity:y[1],res:defect,...errors(y[0],brakeAt(p,t).x)};
+    });
+    return method(order===4?'RK4':'RK2 punto medio',rows,{step:p.step,timeMs:performance.now()-started,reference:distance,
+      criterion:'Hasta v = 0. Los pasos se dividen en el instante de reacción; defecto de la ecuación de velocidad.'});
+  });
+  const reactionDistance=p.v0*p.reaction, brakingDistance=p.v0**2/(2*p.a);
+  const areaStart=performance.now();
+  // Split at the change of acceleration so Simpson/Romberg do not straddle the corner.
+  const area=quadrature(t=>p.v0-p.a*t,0,p.v0/p.a,9);
+  for(const list of Object.values(area))for(const row of list){
+    row.value+=reactionDistance;
+    if(row.row)row.row=row.row.map(v=>v+reactionDistance);
+  }
+  methods.push(...quadratureMethods(area,distance,'m',p.v0/p.a,performance.now()-areaStart));
+  const extended=t=>p.v0-p.a*(t-p.reaction);
+  methods.push(...roots(extended,()=>-p.a,p.reaction,p.reaction+2*p.v0/p.a,p.tolerance??1e-10,end));
+  return {end,distance,reactionDistance,brakingDistance,samples:sampleSets[0],methods,
+    lines:[series('Velocidad',linspace(0,end,180).map(t=>[t,brakeAt(p,t).v]))]};
 }
 
 export function deterioration(p) {
@@ -65,14 +96,14 @@ export function deterioration(p) {
   const gap = p.limit - p.initial;
   const inspection = gap <= 0 ? 0 : 2 * gap / (p.alpha + Math.sqrt(p.alpha ** 2 + 4 * p.beta * gap));
   const end = Math.max(16, inspection * 1.4);
-  const methods = ['Bisección','Secante','Newton-Raphson'].map(name => {
-    if (gap <= 0) return method(name, [], {reference:0, value:0, interpretation:'Umbral alcanzado desde el inicio.'});
-    const start = performance.now();
-    const r = root(name, t=>curve(t)-p.limit, t=>p.alpha + 2*p.beta*t, 0, end, p.tolerance, inspection);
-    return method(name, r.rows, {tolerance:p.tolerance, max:100, timeMs:performance.now()-start, converged:r.converged, reference:inspection});
-  });
-  return {end, inspection, methods, lines:[series('Deterioro D(t)',linspace(0,end,160).map(t=>[t,curve(t)])),series('Umbral',[[0,p.limit],[end,p.limit]])],
-    markers:methods.map(m=>series(m.name,m.rows.map(row=>[row.value,curve(row.value)])))};
+  const rootMethods=gap<=0?rootNames.map(name=>method(name,[],{reference:0,value:0,interpretation:'Umbral alcanzado desde el inicio.'})):
+    roots(t=>curve(t)-p.limit,t=>p.alpha+2*p.beta*t,0,end,p.tolerance,inspection);
+  const coefficientScale=[1,10,100,1000];
+  const expected=[p.initial,10*p.alpha,100*p.beta,0];
+  const calibration=linearMethods(matvec(A,expected),expected,p.tolerance,100,'Calibración auxiliar SPD sobre coeficientes escalados [D₀, 10α, 100β, 1000γ], con γ de referencia igual a cero.');
+  return {end,inspection,methods:[...rootMethods,...calibration],coefficientScale,
+    lines:[series('Deterioro D(t)',linspace(0,end,160).map(t=>[t,curve(t)])),series('Umbral',[[0,p.limit],[end,p.limit]])],
+    markers:rootMethods.map(m=>series(m.name,m.rows.map(row=>[row.value,curve(row.value)])))};
 }
 
 export function exactWind(p, t) {
@@ -124,18 +155,16 @@ export function wind(p) {
     const rows = list.map(({t,y}, k) => {
       const prev = list[k-1];
       const defect = prev ? Math.abs((y[1]-prev.y[1])/(t-prev.t) - acceleration((t+prev.t)/2,(y[0]+prev.y[0])/2,(y[1]+prev.y[1])/2)) : 0;
-      return {k,t,value:y[0],res:defect,...errors(y[0],exactWind(p,t)[0])};
+      return {k,t,value:y[0],velocity:y[1],res:defect,...errors(y[0],exactWind(p,t)[0])};
     });
-    return method(i ? 'RK4' : 'RK2 punto medio',rows,{step:p.step,timeMs:durations[i],reference:exact.at(-1).y[0]});
+    return method(i ? 'RK4' : 'RK2 punto medio',rows,{step:p.step,timeMs:durations[i],reference:exact.at(-1).y[0],criterion:'Paso fijo con último paso ajustado a t = 20 s; defecto discreto de la aceleración.'});
   });
   const magnitude = t=>Math.abs(exactWind(p,t)[0]);
-  const area = quadrature(magnitude,0,end,9);
-  const areaReference = quadrature(magnitude,0,end,15).Romberg.at(-1).value;
-  for (const [name, list] of Object.entries(area)) {
-    const rows = list.map(item=>({...item, res:null, ...errors(item.value,areaReference)}));
-    methods.push(method(name,rows,{step:end/list.at(-1).n,reference:areaReference,interpretation:'Integral de |x(t)| en 0–20 s. Referencia Romberg de malla fina.'}));
-  }
-  return {end,area,methods,samples:[...samples,exact], natural:Math.sqrt(p.k/p.m), ratio:p.c/(2*Math.sqrt(p.k*p.m)),
+  const areaStart=performance.now(), area=quadrature(magnitude,0,end,9);
+  // Independent reference: composite Simpson on two fine grids.
+  const areaReference=quadrature(magnitude,0,end,15).Simpson.at(-1).value;
+  methods.push(...quadratureMethods(area,areaReference,'m·s',end,performance.now()-areaStart));
+  return {end,area,methods,samples:[...samples,exact],peak:Math.max(...exact.map(({y})=>Math.abs(y[0]))),natural:Math.sqrt(p.k/p.m),ratio:p.c/(2*Math.sqrt(p.k*p.m)),
     lines:[series('Analítica',exact.map(({t,y})=>[t,y[0]])),...samples.map((s,i)=>series(i?'RK4':'RK2',s.map(({t,y})=>[t,y[0]])))]};
 }
 
@@ -143,35 +172,42 @@ export function sensors(p) {
   const a = p.runge ? -1 : 0, b = p.runge ? 1 : Math.PI;
   const signal = p.runge ? x=>1/(1+25*x*x) : Math.sin;
   const nodes = linspace(a,b,p.count-1).map((x,i)=>{
-    const position = p.edits[i]?.[0] ?? x;
+    const uneven = p.clustered ? a + (b-a)*((x-a)/(b-a))**2 : x;
+    const position = p.edits[i]?.[0] ?? uneven;
     const offset = p.edits[i]?.[1] ?? 0;
     return [position,signal(position) + offset + p.noise*Math.sin(91*i+0.6)];
   });
-  const test = linspace(a,b,2*(p.count-1)).filter((_,i)=>i%2);
+  const test = p.clustered ? linspace(a,b,44).slice(1,-1).filter(x=>nodes.every(([u])=>Math.abs(u-x)>1e-8)) : linspace(a,b,2*(p.count-1)).filter((_,i)=>i%2);
   const fit = [['Lagrange',lagrange(nodes)],['Spline cúbico',spline(nodes)],['Newton interpolante',newtonInterpolation(nodes)]];
   const methods = fit.map(([name,f])=> {
     const nodeResidual = Math.max(...nodes.map(([x,y])=>Math.abs(f(x)-y)));
     const rows = test.map((t,k)=>({k,t,value:f(t),res:nodeResidual,...errors(f(t),signal(t))}));
     const query = rows[0];
-    return method(name,rows,{value:query.value,reference:signal(query.t),metrics:query,interpretation:'Resultado en la primera muestra oculta. Residuo máximo en nodos.'});
+    return method(name,rows,{value:query.value,reference:signal(query.t),metrics:query,criterion:'Interpolación directa en los nodos comunes. Error en muestras ocultas; residuo máximo en nodos.'});
   });
-  return {end:b-a,a,b,nodes,test,methods,
+  const bias=[0.01,-0.02,0.03,0.005];
+  const calibration=linearMethods(matvec(A,bias),bias,1e-10,100,'Calibración auxiliar SPD de cuatro sesgos sintéticos conocidos; la interpolación se evalúa aparte sobre los nodos del experimento.');
+  return {end:b-a,a,b,nodes,test,methods:[...methods,...calibration],
     lines:[series(p.runge?'Runge':'sen(t)',linspace(a,b,280).map(t=>[t,signal(t)])),...fit.map(([name,f])=>series(name,linspace(a,b,280).map(t=>[t,f(t)])))]};
 }
 
 export const A = [[10,-1,2,0],[-1,11,-1,3],[2,-1,10,-1],[0,3,-1,8]];
 export const b = [6,25,-11,15];
 export const xExact = [1,2,-1,1];
-export function solvers(p) {
-  const methods = ['Jacobi','Gauss-Seidel','CG'].map(name=>{
-    const start = performance.now();
-    const r = solveIterative(name,A,b,p.tolerance,p.max,xExact);
-    return method(name,r.rows,{tolerance:p.tolerance,max:p.max,timeMs:performance.now()-start,converged:r.converged,reference:xExact});
+function linearMethods(rhs,reference,tolerance,max,interpretation='') {
+  const methods=['Jacobi','Gauss-Seidel','CG'].map(name=>{
+    const start=performance.now(), r=solveIterative(name,A,rhs,tolerance,max,reference);
+    return method(name,r.rows,{tolerance,max,timeMs:performance.now()-start,converged:r.converged,reference,interpretation,
+      criterion:`‖b − Ax‖∞ ≤ ${r.threshold.toExponential(3)}; inicio x = 0.`});
   });
-  const start = performance.now();
-  const direct = lu(A,b);
-  methods.push(method('LU',[],{value:direct,timeMs:performance.now()-start,reference:xExact,metrics:{res:residual(A,b,direct),...errors(direct,xExact)}}));
-  return {end:Math.max(...methods.map(m=>m.rows.at(-1)?.k ?? 0)),methods,threshold:p.tolerance*25,
+  const start=performance.now(), direct=lu(A,rhs);
+  methods.push(method('LU',[],{value:direct,timeMs:performance.now()-start,reference,interpretation,
+    criterion:'Método directo con pivoteo parcial.',metrics:{res:residual(A,rhs,direct),...errors(direct,reference)}}));
+  return methods;
+}
+export function solvers(p) {
+  const methods=linearMethods(b,xExact,p.tolerance,p.max);
+  return {end:Math.max(...methods.map(m=>m.rows.at(-1)?.k??0)),methods,threshold:p.tolerance*25,
     lines:methods.slice(0,3).map(m=>series(m.name,m.rows.map(r=>[r.k,Math.log10(Math.max(1e-16,r.res))])))};
 }
 

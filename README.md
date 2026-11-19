@@ -31,6 +31,10 @@ El directorio `dist/` del ZIP incluye la compilación lista para servir. Para us
 
 ## Recorrido sugerido
 
+**Inicio** reúne los cuatro casos. **Comparar escenarios** ejecuta los doce ajustes predeterminados y muestra cómo cambian el indicador, el error por método y la respuesta ante una perturbación. Cada caso presenta un gráfico adicional de error o residuo y sus dos conclusiones.
+
+El [DER y la prueba de recuperación](database/DER.md) documentan cómo relanzar una corrida y verificar los cálculos en pantalla.
+
 1. En **Detención**, presiona **Frenar** y arrastra la barra de tiempo. Compara **NORMAL** con **ESTRÉS**. Con reacción cero obtendrás 62,50 m y 180,00 m de frenado.
 2. En **Deterioro**, reproduce la curva hasta el umbral. Abre el selector de métodos para inspeccionar los iterados de bisección, secante y Newton-Raphson.
 3. En **Viento**, activa el ajuste de resonancia y observa cómo cambia RK2 punto medio frente a RK4 y la referencia analítica. Selecciona Trapecio, Simpson o Romberg en el gráfico para reproducir el refinamiento de la integral.

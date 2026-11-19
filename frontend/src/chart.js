@@ -12,7 +12,7 @@ export function drawChart(svg,legend,input) {
   const colors=module==='wind'&&!integration?['#92f2b8','#60e5f0','#c994ff']:palette;
   let lines=result.lines;
   if(isArea) lines=[{name:'|x(t)|',points:result.lines[0].points.map(([x,y])=>[x,Math.abs(y)])}];
-  if(module==='sensors'&&!showErrors) lines=lines.slice(0,3);
+
   const all=lines.flatMap(line=>line.points).filter(p=>p.every(Number.isFinite));
   const min=Math.min(...all.map(p=>p[0])),max=Math.max(...all.map(p=>p[0]));
   const bottom=Math.min(0,...all.map(p=>p[1])),top=Math.max(1e-8,...all.map(p=>p[1]));
@@ -55,7 +55,7 @@ export function drawChart(svg,legend,input) {
   const inspection=module==='wear'?`<path d="M${mapX(result.inspection)} ${g}V${h-b}" class="cursor-line inspection"/>`:'';
   const focused=svg.contains(document.activeElement)?document.activeElement.dataset.node:null;
   svg.innerHTML=`<defs><linearGradient id="signal-fill" x2="0" y2="1"><stop offset="0" stop-color="#e68d5a" stop-opacity=".29"/><stop offset="1" stop-color="#e68d5a" stop-opacity=".025"/></linearGradient></defs>
-  ${vertical}${horizontal}${layer}${lines.map((line,i)=>`<path d="${poly(line.points,mapX,mapY)}" stroke="${colors[i]}" stroke-width="${i===0?2.3:1.6}" ${module==='wear'&&i===1?'stroke-dasharray="6 5"':''} fill="none" ${attrs}/>`).join('')}${cursor}${inspection}${markers}${hidden}${sensorDots}`;
+  ${vertical}${horizontal}${layer}${lines.map((line,i)=>`<path d="${poly(line.points,mapX,mapY)}" stroke="${colors[i]}" stroke-width="${i===0?2.3:1.6}" ${(module==='wear'&&i===1||module==='sensors'&&i===3)?'stroke-dasharray="6 5"':''} fill="none" ${attrs}/>`).join('')}${cursor}${inspection}${markers}${hidden}${sensorDots}`;
   if(focused!==null&&focused!==undefined) svg.querySelector(`[data-node="${focused}"]`)?.focus({preventScroll:true});
   legend.innerHTML=lines.map((line,i)=>`<span><b style="--key:${colors[i]}"></b>${line.name}</span>`).join('')+
     (module==='wear'?result.markers.map((line,i)=>`<span><b style="--key:${colors[i+1]}"></b>${line.name}</span>`).join(''):'');

@@ -21,7 +21,7 @@ test('Informe §2.2: los tres métodos llegan a 11,3746 y a 9,0587 meses',()=>{
   for(const [scenario,expected] of [['NORMAL',11.3746],['ESTRÉS',9.0587]]){
     const r=calculate('wear',defaults('wear',scenario));
     near(r.inspection,expected,5e-5);
-    for(const m of r.methods){
+    for(const m of r.methods.slice(0,3)){
       near(m.value,r.inspection,1e-8);
       assert.ok(m.converged);
       assert.ok(m.metrics.res<=1e-10);
@@ -88,6 +88,23 @@ test('Informe §2.4: muestra oculta en π/4 y reconstrucción de nodos',()=>{
   const nodes=[[0,0],[0.42,0.8],[1.25,0.9],[1.9,0.22]];
   for(const f of [lagrange(nodes),spline(nodes)])for(const [x,y] of nodes)near(f(x),y,1e-14);
   assert.deepEqual(errors(0.1,0),{abs:0.1,rel:null,percent:null});
-  const runge=calculate('sensors',defaults('sensors','MAL CONDICIONADO'));
+  const runge=calculate('sensors',{...defaults('sensors','MAL CONDICIONADO'),clustered:false,count:11});
   assert.ok(Math.max(...runge.lines[1].points.map(p=>p[1]))>1.5);
+});
+
+test('Detención: ocho métodos y raíces con fase de reacción fuera de la integral refinada',()=>{
+  const p={...defaults('brake','NORMAL'),reaction:1.15};
+  const {methods,end,distance}=calculate('brake',p);
+  assert.equal(methods.length,8);
+  for(const m of methods)near(m.value,m.name.startsWith('RK')||m.rows[0]?.n?distance:end,1e-10);
+  assert.ok(methods.slice(-3).every(m=>m.converged));
+});
+
+test('Deterioro calibra los coeficientes escalados mediante los cuatro solvers SPD',()=>{
+  const r=calculate('wear',defaults('wear','NORMAL'));
+  assert.deepEqual(r.methods.slice(3).map(m=>m.name),['Jacobi','Gauss-Seidel','CG','LU']);
+  for(const m of r.methods.slice(3)){
+    assert.ok(m.metrics.abs<1e-8);
+    assert.ok(m.metrics.res<1e-8);
+  }
 });

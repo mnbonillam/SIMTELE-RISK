@@ -1,5 +1,6 @@
 import {MODULES,TYPES} from '../../numerical_methods/models.js';
 import {icon} from './icons.js';
+import {CASES} from '../../numerical_methods/experiments.js';
 const formatters=new Map();
 function formatter(decimals){
   if(!formatters.has(decimals))formatters.set(decimals,new Intl.NumberFormat('es-BO',{minimumFractionDigits:decimals,maximumFractionDigits:decimals}));
@@ -12,7 +13,7 @@ const nav=(key,i)=>`<button class="nav-item" data-module="${key}" aria-pressed="
 export function mount() {
   document.querySelector('#app').innerHTML=`
   <header class="topbar">
-    <a class="brand" href="./" aria-label="SIMTELE-RISK, inicio"><span class="brand-symbol">${icon('logo',26)}</span><span>SIMTELE<span class="brand-risk">-RISK</span><small>LABORATORIO NUMÉRICO</small></span></a>
+    <a class="brand" id="home-link" href="./" aria-label="SIMTELE-RISK, inicio"><span class="brand-symbol">${icon('logo',26)}</span><span>SIMTELE<span class="brand-risk">-RISK</span><small>LABORATORIO NUMÉRICO</small></span></a>
     <div class="course"><span>DAT 242</span><span>Métodos Numéricos · UMSA</span></div>
     <div class="top-actions">
       <button class="utility" id="error-mode" aria-pressed="false" title="Mostrar errores y residuos"><span class="switch"></span>Modo Error</button>
@@ -22,12 +23,16 @@ export function mount() {
   </header>
   <div class="shell">
     <aside class="rail" aria-label="Navegación">
-      <div class="rail-main"><p class="label">CASOS DE ESTUDIO</p><nav aria-label="Casos de estudio">${['brake','wear','wind','sensors'].map(nav).join('')}</nav>
-      <p class="label rail-divider">ANÁLISIS NUMÉRICO</p><nav aria-label="Análisis numérico">${nav('solvers')}${nav('condition')}</nav>
+      <div class="rail-main"><button class="nav-item" id="home-nav"><span class="nav-icon">${icon('logo')}</span>Inicio</button><p class="label">CASOS DE ESTUDIO</p><nav aria-label="Casos de estudio">${['brake','wear','wind','sensors'].map(nav).join('')}</nav>
+      <p class="label rail-divider">HERRAMIENTAS AUXILIARES</p><nav aria-label="Herramientas auxiliares">${nav('solvers')}${nav('condition')}</nav>
       <p class="label rail-divider">REGISTRO</p><button class="nav-item" id="history"><span class="nav-icon">${icon('history')}</span>Historial</button></div>
       <div class="rail-foot"><span class="tiny-dot"></span><span>Datos sintéticos<small>Modelo educativo</small></span></div>
     </aside>
     <main id="workspace">
+      <section class="home-band" id="lab-home" aria-labelledby="home-title">
+        <div class="panel-head"><div><p class="label">LABORATORIO · DAT 242</p><h2 id="home-title">Elige un caso de estudio</h2></div><button class="button" id="global-compare">${icon('solvers',16)} Comparar escenarios</button></div>
+        <div class="home-cards">${CASES.map((key,i)=>`<button class="home-card panel" data-case="${key}"><span class="tile-icon">${icon(key)}</span><span><strong>${MODULES[key].short}</strong><small>${['Tiempo y distancia de frenado','Umbral y coeficientes','Oscilación e integración','Interpolación y ruido'][i]}</small></span>${icon('arrow',16)}</button>`).join('')}</div>
+      </section>
       <div class="page-title">
         <div><div class="breadcrumb" id="breadcrumb"></div><h1 id="module-title"></h1><p id="module-subtitle"></p></div>
         <div class="scenario-wrap"><label class="label" for="scenario">ESCENARIO</label><div class="select-wrap"><span class="scenario-dot"></span><select id="scenario">${TYPES.map(t=>option(t)).join('')}</select>${icon('chevron',16)}</div></div>
@@ -53,6 +58,7 @@ export function mount() {
         </section>
         <aside class="panel config" aria-label="Configuración del modelo" id="config"></aside>
       </div>
+      <div class="panel replay-check" id="replay-check" role="status" hidden></div>
       <div class="metrics" id="metrics" aria-label="Telemetría"></div>
       <div class="analysis-grid">
         <section class="panel chart-panel" id="chart-holder" aria-labelledby="chart-title">
@@ -63,10 +69,13 @@ export function mount() {
         </section>
         <aside class="panel results" id="results" aria-label="Resultados numéricos"></aside>
       </div>
+      <div class="evidence-grid" id="evidence"></div>
       <div class="disclaimer">${icon('info',16)} Datos sintéticos con fines educativos. No representan instalaciones reales ni datos operativos de Mi Teleférico.</div>
     </main>
   </div>
   <dialog id="history-dialog" aria-labelledby="history-title"><div class="dialog-head"><div><p class="label">REGISTRO LOCAL</p><h2 id="history-title">Historial de simulaciones</h2></div><button id="history-close" class="utility icon-button" aria-label="Cerrar historial">${icon('close')}</button></div><div class="history-tools"><label class="sr-only" for="history-search">Buscar corrida</label><input id="history-search" type="search" placeholder="Buscar por caso, escenario o fecha"><button id="compare" class="button" disabled>Comparar selección</button></div><div id="history-content"></div><div id="comparison" hidden></div></dialog>
+  <dialog id="presets-dialog" aria-labelledby="presets-title"><div class="dialog-head"><div><p class="label">EXPERIMENTOS REPRODUCIBLES</p><h2 id="presets-title">Comparación de escenarios</h2></div><button id="presets-close" class="utility icon-button" aria-label="Cerrar comparación">${icon('close')}</button></div>
+    <div class="history-tools"><p class="chart-note">Valores con parámetros predeterminados de cada escenario.</p><select id="presets-filter" aria-label="Caso de estudio"></select></div><div id="presets-output" aria-live="polite"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>`;
   document.querySelector('#rate').value='1';
 }

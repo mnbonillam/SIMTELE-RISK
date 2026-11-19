@@ -8,14 +8,34 @@ import {drawChart} from './chart.js';
 import {mount,format,escape,configMarkup,controls,sliderText,titles} from './layout.js';
 import {icon} from './icons.js';
 import {csv,pdf} from './export.js';
+import {drawEvidence,setupComparison} from './evidence.js';
+import {verifyReplay} from '../../numerical_methods/experiments.js';
 
 mount();
 const q=(id)=>document.getElementById(id);
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const s={module:'brake',scenario:'NORMAL',params:defaults('brake','NORMAL'),result:null,t:0,rate:1,playing:false,intro:!reduced.matches&&!sessionStorage.getItem('simtele-entered'),
-  showErrors:false,quality:false,night:false,methodIndex:0,integration:'',refinement:0,record:null,pendingRun:false};
+  showErrors:false,replayReference:null,quality:false,night:false,methodIndex:0,integration:'',refinement:0,record:null,pendingRun:false};
 const stage=q('stage'),scene=createScene(stage);
 const worker=new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
+const openPresets=setupComparison(worker,(module,scenario)=>{
+  finishIntro();q('lab-home').hidden=true;selectModule(module,scenario);
+  q('module-title').scrollIntoView({block:'start'});
+});
+const showHome=(event)=>{
+  event?.preventDefault();finishIntro();q('lab-home').hidden=false;
+  q('lab-home').scrollIntoView({block:'start'});
+};
+q('home-link').onclick=showHome;
+q('home-nav').onclick=showHome;
+q('global-compare').onclick=()=>{finishIntro();openPresets();};
+q('evidence').addEventListener('click',e=>{
+  if(e.target.closest('[data-show-presets]'))openPresets(s.module);
+});
+document.querySelectorAll('[data-case]').forEach(button=>button.onclick=()=>{
+  finishIntro();q('lab-home').hidden=true;selectModule(button.dataset.case,'NORMAL');
+  q('module-title').scrollIntoView({block:'start'});
+});
 let activeRequest=0, readyRequest=0, queuedFrame=0, chartView, drag=null, toastTimer, list=[], selected=new Set(), dialogRev=0;
 let lastHud=0, lastFrame=0, accumulator=0;
 function notify(message) {
@@ -48,10 +68,19 @@ function query() {
   queuedFrame=requestAnimationFrame(()=>worker.postMessage({id,module:s.module,params:s.params}));
 }
 worker.onmessage=({data})=>{
-  if(data.id!==activeRequest)return;
+  if(data.type==='presets'||data.id!==activeRequest)return;
   if(data.error){s.pendingRun=false;notify(data.error);return;}
   readyRequest=data.id; s.result=data.result;s.t=Math.min(s.t,s.result.end);
   displayResult();
+  if(s.replayReference){
+    const check=verifyReplay(s.replayReference,s.result);
+    const pass=check.verified===check.total&&check.sameCurves;
+    q('replay-check').hidden=false;
+    q('replay-check').textContent=pass
+      ? `Reproducción verificada · ${check.verified} métodos, sus iteraciones y las curvas coinciden (tolerancia escalada 10⁻¹⁰).`
+      : `Reproducción: ${check.verified} de ${check.total} métodos históricos coinciden; curvas ${check.sameCurves?'coincidentes':'distintas'}. Revisa la versión del modelo.`;
+    s.replayReference=null;
+  }
   if(s.pendingRun){s.pendingRun=false;startRun();}
 };
 worker.onerror=()=>notify('El motor numérico no pudo iniciarse.');
@@ -88,12 +117,14 @@ function beginPlayback(){
   }
 }
 function changed(reset=true){
+  q('replay-check').hidden=true;s.replayReference=null;
   if(reset){s.t=0;stop();}
   s.pendingRun=false;
   s.result=null;
   query();
 }
 function selectModule(module,scenario=s.scenario,params=null,result=null){
+  q('evidence').hidden=true;q('replay-check').hidden=true;s.replayReference=null;
   s.module=module;s.scenario=scenario;s.params=params?structuredClone(params):defaults(module,scenario);
   s.result=result;s.t=0;s.methodIndex=0;s.integration='';s.refinement=0;s.record=null;s.pendingRun=false;
   activeRequest++;cancelAnimationFrame(queuedFrame);stop();
@@ -116,7 +147,7 @@ function drawFrame(){
     drawFrame();changed();
   });
   q('runge')?.addEventListener('change',e=>{
-    s.params={...s.params,runge:e.target.checked,count:e.target.checked?11:3,edits:{}};
+    s.params={...s.params,runge:e.target.checked,clustered:false,count:e.target.checked?11:3,edits:{}};
     drawFrame();changed();
   });
   q('reset-nodes')?.addEventListener('click',()=>{s.params={...s.params,edits:{}};changed(false);});
@@ -158,7 +189,7 @@ q('play').onclick=beginPlayback;
 q('reset-time').onclick=()=>{finishIntro();stop();s.t=0;s.refinement=0;updateHud();if(s.integration)drawGraph();};
 q('timeline').oninput=e=>{finishIntro();stop();s.t=Number(e.target.value);updateHud();updateRefinement();};
 q('scenario').onchange=e=>{finishIntro();selectModule(s.module,e.target.value);};
-document.querySelectorAll('[data-module]').forEach(el=>el.onclick=()=>{finishIntro();selectModule(el.dataset.module);});
+document.querySelectorAll('[data-module]').forEach(el=>el.onclick=()=>{finishIntro();q('lab-home').hidden=true;selectModule(el.dataset.module);});
 q('error-mode').onclick=()=>{
   s.showErrors=!s.showErrors;
   q('error-mode').setAttribute('aria-pressed',String(s.showErrors));
@@ -189,6 +220,7 @@ function displayResult(){
   q('integration')?.addEventListener('change',e=>{s.integration=e.target.value;s.refinement=0;updateRefinement();drawGraph();});
   drawStagePanel();
   drawResults();
+  drawEvidence(q('evidence'),s);
   drawGraph();
   updateHud();
 }
@@ -240,6 +272,7 @@ function drawResults() {
    <dt>Error relativo</dt><dd>${format(e.rel,6)}</dd>
    <dt>Error porcentual</dt><dd>${e.percent==null?'—':format(e.percent,6)+' %'}</dd>
    <dt>${['brake','wind'].includes(s.module)&&m.step!==null&&m.name.startsWith('RK')?'Defecto discreto':'Residuo'}</dt><dd>${format(e.res,6)}</dd>`:'';
+  const windSummary=s.module==='wind'&&r.peak!==undefined?`<dt>Pico analítico muestreado</dt><dd>${format(r.peak,4)} m</dd>`:'';
   const brakeSummary=s.module==='brake'?`<dt>Solo frenado</dt><dd>${format(r.brakingDistance)} m</dd><dt>Reacción</dt><dd>${format(r.reactionDistance)} m</dd>`:'';
   const solverSummary=s.module==='solvers'?`<dt>Umbral ‖r‖∞</dt><dd>${format(r.threshold)}</dd>`:'';
   const wearSummary=s.module==='wear'?`<dt>Mes de inspección</dt><dd>${format(r.inspection,4)}</dd>`:'';
@@ -247,14 +280,14 @@ function drawResults() {
   const status=m.converged===null?'':`<div class="result-status ${m.converged?'':'warning'}">${m.converged?'Convergió':'Límite de iteraciones alcanzado'}</div>`;
   q('results').innerHTML=`<div class="panel-head"><div><p class="label">VALIDACIÓN</p><h2>Resultados numéricos</h2></div><span class="tile-icon">${icon('gauge',18)}</span></div>
    <label class="compact-select method-select">Método<select id="method">${r.methods.map((x,i)=>`<option value="${i}" ${i===s.methodIndex?'selected':''}>${x.name}</option>`).join('')}</select></label>
-   <dl class="result-values"><dt>Aproximación</dt><dd>${format(m.value,4)}</dd><dt>Referencia</dt><dd>${format(m.reference,4)}</dd><dt>${s.module==='solvers'||s.module==='wear'?'Iteraciones':'Registros'}</dt><dd>${count||'—'}</dd>${brakeSummary}${solverSummary}${wearSummary}${errorRows}</dl>
-   ${status}${m.interpretation?`<p class="result-note">${m.interpretation}</p>`:''}
-   <details id="iterations" ${m.rows.length?'':'hidden'}><summary>Ver detalle numérico</summary><div class="iteration-scroll"><table><thead><tr><th>Índice</th><th>Valor</th><th>Residuo</th><th>Error abs.</th></tr></thead><tbody></tbody></table></div></details>
+   <dl class="result-values"><dt>Aproximación</dt><dd>${format(m.value,4)}</dd><dt>Referencia</dt><dd>${format(m.reference,4)}</dd><dt>${s.module==='solvers'||s.module==='wear'?'Iteraciones':'Registros'}</dt><dd>${count||'—'}</dd>${brakeSummary}${solverSummary}${wearSummary}${windSummary}${m.step!==null?`<dt>Paso</dt><dd>${format(m.step,6)}</dd>`:''}${m.tolerance!==null?`<dt>Tolerancia</dt><dd>${format(m.tolerance,6)}</dd>`:''}${errorRows}</dl>
+   ${status}${m.criterion?`<p class="result-note">${m.criterion}</p>`:''}${m.interpretation?`<p class="result-note">${m.interpretation}</p>`:''}
+   <details id="iterations" ${m.rows.length?'':'hidden'}><summary>Ver detalle numérico</summary><div class="iteration-scroll"><table><thead><tr><th>Índice</th><th>${m.rows.some(row=>row.n)?'n':'t'}</th><th>Valor</th><th>Residuo</th><th>Error abs.</th><th>Error rel.</th><th>Error %</th></tr></thead><tbody></tbody></table></div></details>
    <div class="result-actions"><button class="button" id="save">${icon('save',15)} Guardar</button><button class="button" id="csv" title="Exportar el detalle a CSV">${icon('download',14)} CSV</button><button class="button" id="pdf" title="Exportar el resumen a PDF">PDF</button></div>`;
-  q('method').onchange=e=>{s.methodIndex=Number(e.target.value);drawResults();q('method').focus();updateHud();};
+  q('method').onchange=e=>{s.methodIndex=Number(e.target.value);drawResults();drawEvidence(q('evidence'),s);q('method').focus();updateHud();};
   q('iterations').ontoggle=e=>{
     if(!e.target.open)return;
-    e.target.querySelector('tbody').innerHTML=m.rows.map(row=>`<tr><td>${row.k}</td><td>${format(row.value,7)}</td><td>${format(row.res,5)}</td><td>${format(row.abs,5)}</td></tr>`).join('');
+    e.target.querySelector('tbody').innerHTML=m.rows.map(row=>`<tr><td>${row.k}</td><td>${row.n??format(row.t,4)}</td><td>${format(row.value,7)}</td><td>${format(row.res,5)}</td><td>${format(row.abs,5)}</td><td>${format(row.rel,5)}</td><td>${format(row.percent,5)}</td></tr>`).join('');
   };
   q('save').onclick=()=>void storeCurrent(true);
   q('csv').onclick=()=>{if(readyRequest===activeRequest)csv(snapshot());};
@@ -384,7 +417,7 @@ async function open(id,rerun){
     const run=await loadRun(id);
     dialog.close();
     selectModule(run.module,run.scenario,run.params,rerun?null:run.result);
-    if(rerun)s.pendingRun=true;
+    if(rerun){s.pendingRun=true;s.replayReference=run.result;}
     else notify('Corrida recuperada');
   } catch{notify('No se pudo recuperar la corrida');}
 }
