@@ -273,7 +273,7 @@ export function createScene(host) {
   }
   function render(s, dt) {
     if(!measuredWidth) return;
-    const key=[s.module,s.scenario,s.intro,s.night,s.reduced,s.t,s.distance,s.wear,s.limit,...(s.swing??[])].join('|');
+    const key=[s.module,s.scenario,s.intro,s.zoom,s.night,s.reduced,s.t,s.distance,s.wear,s.limit,...(s.swing??[])].join('|');
     if(key!==lastKey){lastKey=key;settle=s.reduced?0:1.5;dirty=true;}
     if(!dirty&&settle<=0)return;
     dirty=false;settle-=dt;
@@ -328,6 +328,13 @@ export function createScene(host) {
     }[s.module];
     if(s.intro){desired.set(point.x+35,point.y+2,0);desiredCam.set(point.x-34,point.y+43,152-introFade*24);}
     else {desired.set(point.x+shot[0],point.y+shot[1],0);desiredCam.set(point.x+shot[2],point.y+shot[3],shot[4]);}
+    if(!s.intro&&s.zoom!==1){
+      if(s.zoom>1){
+        const weight=tone(s.zoom,1,2.1);
+        desired.lerp(vector(point.x,point.y-5,point.z),weight);
+      }
+      desiredCam.lerp(desired,1-1/s.zoom);
+    }
     focus.lerp(desired,easing); camera.position.lerp(desiredCam,easing); camera.lookAt(focus);
     renderer.render(scene,camera);
   }

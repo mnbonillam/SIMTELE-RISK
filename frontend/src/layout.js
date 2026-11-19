@@ -14,7 +14,7 @@ export function mount() {
   document.querySelector('#app').innerHTML=`
   <header class="topbar">
     <a class="brand" id="home-link" href="./" aria-label="SIMTELE-RISK, inicio"><span class="brand-symbol">${icon('logo',26)}</span><span>SIMTELE<span class="brand-risk">-RISK</span><small>LABORATORIO NUMÉRICO</small></span></a>
-    <div class="course"><span>DAT 242 - COM 254</span><span>Métodos Numéricos · UMSA</span></div>
+    <div class="course"><span>DAT 252 - COM 254</span><span>Métodos Numéricos · UMSA</span></div>
     <div class="top-actions">
       <button class="utility" id="error-mode" aria-pressed="false" title="Mostrar errores y residuos"><span class="switch"></span>Modo Error</button>
       <button class="utility icon-button" id="quality" aria-pressed="false" title="Calidad baja" aria-label="Calidad baja">${icon('layers')}</button>
@@ -30,7 +30,7 @@ export function mount() {
     </aside>
     <main id="workspace">
       <section class="home-band" id="lab-home" aria-labelledby="home-title">
-        <div class="panel-head"><div><p class="label">LABORATORIO · DAT 242 - COM 254</p><h2 id="home-title">Elige un caso de estudio</h2></div><button class="button" id="global-compare">${icon('solvers',16)} Comparar escenarios</button></div>
+        <div class="panel-head"><div><p class="label">LABORATORIO · DAT 252 - COM 254</p><h2 id="home-title">Elige un caso de estudio</h2></div><button class="button" id="global-compare">${icon('solvers',16)} Comparar escenarios</button></div>
         <div class="home-cards">${CASES.map((key,i)=>`<button class="home-card panel" data-case="${key}"><span class="tile-icon">${icon(key)}</span><span><strong>${MODULES[key].short}</strong><small>${['Tiempo y distancia de frenado','Umbral y coeficientes','Oscilación e integración','Interpolación y ruido'][i]}</small></span>${icon('arrow',16)}</button>`).join('')}</div>
       </section>
       <div class="page-title">
@@ -42,9 +42,14 @@ export function mount() {
           <div class="stage" id="stage">
             <div class="stage-vignette"></div>
             <div class="stage-top"><span class="stage-label"><span class="live-dot"></span> VISTA 3D</span><span class="stage-location">VALLE ANDINO <i></i> LA PAZ, BOLIVIA</span></div>
-            <div class="intro" id="intro"><span class="label">UMSA · INFORMÁTICA · DAT 242 - COM 254</span><div>SIMTELE<span>-RISK</span></div><button type="button" id="enter" class="primary">Entrar al laboratorio ${icon('arrow',16)}</button></div>
+            <div class="intro" id="intro"><span class="label">UMSA · INFORMÁTICA · DAT 252 - COM 254</span><div>SIMTELE<span>-RISK</span></div><button type="button" id="enter" class="primary">Entrar al laboratorio ${icon('arrow',16)}</button></div>
             <div class="stage-module" id="stage-module" hidden></div>
             <div class="scene-tag" id="limit-tag">LÍMITE · 150 m</div>
+            <div class="camera-controls" id="camera-controls" role="group" aria-label="Acercamiento de la cámara 3D">
+              <button class="utility icon-button" id="camera-out" type="button" aria-label="Alejar cámara" title="Alejar cámara">${icon('zoomOut',16)}</button>
+              <button class="utility camera-reset" id="camera-reset" type="button" aria-label="Restablecer acercamiento" title="Restablecer acercamiento"><span id="camera-magnification">1×</span></button>
+              <button class="utility icon-button" id="camera-in" type="button" aria-label="Acercar cámara" title="Acercar cámara">${icon('zoomIn',16)}</button>
+            </div>
             <div class="stage-bottom"><span>${icon('point',15)} <span id="camera-label">CÁMARA DE SEGUIMIENTO</span></span><span id="scene-state">EN ESPERA</span></div>
           </div>
           <div class="transport" aria-label="Reproducción">

@@ -37,6 +37,8 @@ document.querySelectorAll('[data-case]').forEach(button=>button.onclick=()=>{
   q('module-title').scrollIntoView({block:'start'});
 });
 let activeRequest=0, readyRequest=0, queuedFrame=0, chartView, drag=null, toastTimer, list=[], selected=new Set(), dialogRev=0;
+const cameraLevels=[0.75,1,1.35,1.8,2.4];
+let cameraLevel=1;
 let lastHud=0, lastFrame=0, accumulator=0;
 function notify(message) {
   q('toast').textContent=message;q('toast').hidden=false;clearTimeout(toastTimer);
@@ -55,6 +57,16 @@ function finishIntro(){
   }
   sessionStorage.setItem('simtele-entered','1');
 }
+q('camera-controls').hidden=stage.classList.contains('no-webgl');
+function setCameraLevel(level){
+  cameraLevel=Math.max(0,Math.min(cameraLevels.length-1,level));
+  q('camera-out').disabled=cameraLevel===0;
+  q('camera-in').disabled=cameraLevel===cameraLevels.length-1;
+  q('camera-magnification').textContent=new Intl.NumberFormat('es-BO').format(cameraLevels[cameraLevel])+'×';
+}
+q('camera-out').onclick=()=>setCameraLevel(cameraLevel-1);
+q('camera-in').onclick=()=>setCameraLevel(cameraLevel+1);
+q('camera-reset').onclick=()=>setCameraLevel(1);
 q('intro').hidden=!s.intro;
 q('enter').onclick=finishIntro;
 if(s.intro) setTimeout(()=>{if(s.intro)finishIntro();},3500);
@@ -451,7 +463,7 @@ function animate(now){
   const b=s.module==='brake'?brakeAt(p,t):{x:0,v:0};
   const wear=s.module==='wear'?p.initial+p.alpha*t+p.beta*t*t:0;
   const swing=s.module==='wind'&&r?r.samples.map(list=>sampleAt(list,t)[0]):null;
-  scene.render({module:s.module,scenario:s.scenario,intro:s.intro,night:s.night,t,distance:b.x,speed:b.v,wear,limit:p.limit,swing,amplification:p.amplification,reduced:reduced.matches},frame);
+  scene.render({zoom:cameraLevels[cameraLevel],module:s.module,scenario:s.scenario,intro:s.intro,night:s.night,t,distance:b.x,speed:b.v,wear,limit:p.limit,swing,amplification:p.amplification,reduced:reduced.matches},frame);
   const tag=q('limit-tag'), projected=!s.intro&&s.module==='brake'?scene.track('limit'):null;
   tag.hidden=!projected?.visible;
   if(projected?.visible){tag.style.left=projected.x+'%';tag.style.top=projected.y+'%';}

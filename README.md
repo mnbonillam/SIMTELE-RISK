@@ -1,6 +1,6 @@
 # SIMTELE-RISK
 
-Laboratorio 3D de **Métodos Numéricos (DAT 242)**, carrera de Informática de la **UMSA**. El valle está inspirado en La Paz, Bolivia. Todos los parámetros y resultados son sintéticos y tienen fines educativos.
+Laboratorio 3D de **Métodos Numéricos (DAT 252 - COM 254)**, carrera de Informática de la **UMSA**. El valle está inspirado en La Paz, Bolivia. Todos los parámetros y resultados son sintéticos y tienen fines educativos.
 
 ## GitHub Pages
 

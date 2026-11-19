@@ -27,7 +27,7 @@ export async function pdf({module,scenario,params,result,date=new Date().toISOSt
   doc.addFileToVFS('DejaVuSans.ttf',btoa(binary));
   doc.addFont('DejaVuSans.ttf','DejaVu','normal');
   doc.setFont('DejaVu');
-  doc.setProperties({title:'SIMTELE-RISK · '+MODULES[module].title,subject:'Laboratorio DAT 242 · UMSA'});
+  doc.setProperties({title:'SIMTELE-RISK · '+MODULES[module].title,subject:'Laboratorio DAT 252 - COM 254 · UMSA'});
   const accent=[187,84,42];
   doc.setFillColor(...accent);
   doc.rect(19,13,14,1.5,'F');
@@ -39,7 +39,7 @@ export async function pdf({module,scenario,params,result,date=new Date().toISOSt
     doc.text(lines,19,y);
     y+=gap*lines.length;
   }
-  line('SIMTELE-RISK  /  DAT 242', {size:12,color:accent,gap:11});
+  line('SIMTELE-RISK  /  DAT 252 - COM 254', {size:12,color:accent,gap:11});
   line(MODULES[module].title,{size:21,gap:10});
   line(scenario+'  |  '+date);
   line('UMSA · Informática · Métodos Numéricos');
