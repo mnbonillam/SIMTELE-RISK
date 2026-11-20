@@ -21,6 +21,14 @@ export function mount() {
       <button class="utility icon-button" id="night" aria-pressed="false" title="Alternar día y noche" aria-label="Modo nocturno">${icon('moon')}</button>
     </div>
   </header>
+  <div class="credits" aria-label="Integrantes del proyecto">
+    <p class="label">Integrantes</p>
+    <ul>
+      <li>Cristian Quisbert Tejerina <span>DAT 252</span></li>
+      <li>Fabrizio Carballo Reyes <span>DAT 252</span></li>
+      <li>Marcela Bonilla Mamani <span>COM 254</span></li>
+    </ul>
+  </div>
   <div class="shell">
     <aside class="rail" aria-label="Navegación">
       <div class="rail-main"><button class="nav-item" id="home-nav"><span class="nav-icon">${icon('logo')}</span>Inicio</button><p class="label">CASOS DE ESTUDIO</p><nav aria-label="Casos de estudio">${['brake','wear','wind','sensors'].map(nav).join('')}</nav>
