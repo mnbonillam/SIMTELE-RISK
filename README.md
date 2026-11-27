@@ -29,6 +29,10 @@ npm run preview
 
 El directorio `dist/` del ZIP incluye la compilación lista para servir. Para usarla sin instalar Node.js, con Python 3 ejecuta `python -m http.server 8080 --directory dist` y abre [http://localhost:8080](http://localhost:8080). También se puede publicar el contenido de `dist/` en un alojamiento estático. Usa HTTP para que los módulos JavaScript, el Web Worker e IndexedDB funcionen correctamente. Conserva el mismo origen (host y puerto) para recuperar el mismo historial.
 
+## Sensor de tensión del cable
+
+El caso **Sensores** estima la fuerza simulada en el anclaje del cable (kN). La referencia sintética alcanza 52 kN a los 6 s. Se retienen nodos a ambos lados del intervalo sin lecturas. El escenario de estrés amplía el intervalo y añade ruido, mientras que el mal condicionado agrupa nodos y amplifica perturbaciones. La casilla Runge conserva un experimento matemático aparte. La referencia, los nodos y las tres reconstrucciones se guardan en el historial.
+
 ## Recorrido sugerido
 
 **Inicio** reúne los cuatro casos. **Comparar escenarios** ejecuta los doce ajustes predeterminados y muestra cómo cambian el indicador, el error por método y la respuesta ante una perturbación. Cada caso presenta un gráfico adicional de error o residuo y sus dos conclusiones.

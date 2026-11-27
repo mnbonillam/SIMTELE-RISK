@@ -6,7 +6,7 @@ export const MODULES = {
   brake: {title:'Detención de emergencia', short:'Detención', subtitle:'Cinemática de frenado con desaceleración constante.', equation:'dv/dt = −a    ·    dx/dt = v', unit:'s'},
   wear: {title:'Deterioro mecánico', short:'Deterioro', subtitle:'Localiza el cruce del umbral de inspección.', equation:'D(t) = D₀ + αt + βt²', unit:'meses'},
   wind: {title:'Oscilaciones por viento', short:'Viento', subtitle:'Explora el amortiguamiento, la resonancia y el paso temporal.', equation:'mx″ + cx′ + kx = F sen(ωt)', unit:'s'},
-  sensors: {title:'Reconstrucción de sensores', short:'Sensores', subtitle:'Reconstruye una señal a partir de muestras incompletas.', equation:'y(t) = sen(t)    ·    Runge: 1 / (1 + 25t²)', unit:'rad'},
+  sensors: {title:'Reconstrucción de sensores', short:'Sensores', subtitle:'Recupera lecturas perdidas de tensión cerca del paso simulado de una cabina.', equation:'T(t) = 40 + 12 exp[−((t − 6)/1,6)²]', unit:'s'},
   solvers: {title:'Carrera de solvers', short:'Solvers', subtitle:'Observa cómo cae el residuo del sistema SPD 4 × 4.', equation:'Ax = b    ·    ‖b − Ax‖∞ ≤ τ max(1, ‖b‖∞)', unit:'iter'},
   condition: {title:'Mal condicionamiento', short:'Condicionamiento', subtitle:'Mide cómo una perturbación se amplifica cerca de la singularidad.', equation:'κ₂(A) = (2 − ε) / ε', unit:''}
 };
@@ -18,7 +18,7 @@ export function defaults(module, scenario) {
     brake: {v0:stress ? 12 : 10, a:stress ? 0.4 : 0.8, reaction:0, step:stress ? 0.5 : 0.25, tolerance:1e-10},
     wear: {initial:0.1, alpha:0.015, beta:stress ? 0.002 : 0.001, limit:0.4, tolerance:1e-10},
     wind: {m:250, c:stress ? 14 : 40, k:1000, force:stress ? 18 : 0, omega:stress ? 2 : 1.25, step:stress ? 0.65 : 0.12, amplification:10},
-    sensors: {noise:stress ? 0.12 : 0, runge:ill, clustered:ill, count:ill ? 7 : stress ? 7 : 3, edits:{}},
+    sensors: {tension:true, gap:stress?2:1, noise:stress?0.12:0, runge:false, clustered:ill, count:ill?11:9, edits:{}},
     solvers: {tolerance:stress ? 1e-12 : 1e-10, max:100},
     condition: {logE:stress ? -4 : -3}
   }[module];
@@ -168,27 +168,42 @@ export function wind(p) {
     lines:[series('Analítica',exact.map(({t,y})=>[t,y[0]])),...samples.map((s,i)=>series(i?'RK4':'RK2',s.map(({t,y})=>[t,y[0]])))]};
 }
 
+export function sensorSignal(params,t){
+  if(params.runge)return 1/(1+25*t*t);
+  if(params.tension)return 40+12*Math.exp(-(((t-6)/1.6)**2));
+  return Math.sin(t);
+}
+
 export function sensors(p) {
-  const a = p.runge ? -1 : 0, b = p.runge ? 1 : Math.PI;
-  const signal = p.runge ? x=>1/(1+25*x*x) : Math.sin;
-  const nodes = linspace(a,b,p.count-1).map((x,i)=>{
-    const uneven = p.clustered ? a + (b-a)*((x-a)/(b-a))**2 : x;
-    const position = p.edits[i]?.[0] ?? uneven;
-    const offset = p.edits[i]?.[1] ?? 0;
-    return [position,signal(position) + offset + p.noise*Math.sin(91*i+0.6)];
+  const tension=p.tension&&!p.runge;
+  const a=p.runge?-1:0, b=p.runge?1:tension?12:Math.PI;
+  const gap=tension?[6-(p.gap??1),6+(p.gap??1)]:null;
+  const signal=t=>sensorSignal(p,t);
+  const split=Math.floor(p.count/2);
+  const locations=gap?[
+    ...Array.from({length:split},(_,i)=>gap[0]*(i/(split-1||1))**(p.clustered?4:1)),
+    ...linspace(gap[1],b,p.count-split-1)
+  ]:linspace(a,b,p.count-1).map(x=>p.clustered?a+(b-a)*((x-a)/(b-a))**2:x);
+  const nodes=locations.map((x,i)=>{
+    const position=p.edits[i]?.[0]??x;
+    return [position,signal(position)+(p.edits[i]?.[1]??0)+p.noise*Math.sin(91*i+0.6)];
   });
-  const test = p.clustered ? linspace(a,b,44).slice(1,-1).filter(x=>nodes.every(([u])=>Math.abs(u-x)>1e-8)) : linspace(a,b,2*(p.count-1)).filter((_,i)=>i%2);
+  const test=gap?[6, ...linspace(gap[0],gap[1],8).slice(1,-1).filter(x=>x!==6)]:
+    p.clustered?linspace(a,b,44).slice(1,-1).filter(x=>nodes.every(([u])=>Math.abs(u-x)>1e-8)):
+    linspace(a,b,2*(p.count-1)).filter((_,i)=>i%2);
+  const hidden=test.filter(x=>!gap||nodes.every(([u])=>Math.abs(u-x)>1e-8));
+  if(!hidden.length)hidden.push(6);
   const fit = [['Lagrange',lagrange(nodes)],['Spline cúbico',spline(nodes)],['Newton interpolante',newtonInterpolation(nodes)]];
   const methods = fit.map(([name,f])=> {
     const nodeResidual = Math.max(...nodes.map(([x,y])=>Math.abs(f(x)-y)));
-    const rows = test.map((t,k)=>({k,t,value:f(t),res:nodeResidual,...errors(f(t),signal(t))}));
+    const rows = hidden.map((t,k)=>({k,t,value:f(t),res:nodeResidual,...errors(f(t),signal(t))}));
     const query = rows[0];
     return method(name,rows,{value:query.value,reference:signal(query.t),metrics:query,criterion:'Interpolación directa en los nodos comunes. Error en muestras ocultas; residuo máximo en nodos.'});
   });
   const bias=[0.01,-0.02,0.03,0.005];
   const calibration=linearMethods(matvec(A,bias),bias,1e-10,100,'Calibración auxiliar SPD de cuatro sesgos sintéticos conocidos; la interpolación se evalúa aparte sobre los nodos del experimento.');
-  return {end:b-a,a,b,nodes,test,methods:[...methods,...calibration],
-    lines:[series(p.runge?'Runge':'sen(t)',linspace(a,b,280).map(t=>[t,signal(t)])),...fit.map(([name,f])=>series(name,linspace(a,b,280).map(t=>[t,f(t)])))]};
+  return {end:b-a,a,b,nodes,test:hidden,gap,unit:tension?'kN':'',timeUnit:tension?'s':p.runge?'':'rad',methods:[...methods,...calibration],
+    lines:[series(p.runge?'Runge':tension?'Tensión de referencia':'sen(t)',linspace(a,b,280).map(t=>[t,signal(t)])),...fit.map(([name,f])=>series(name,linspace(a,b,280).map(t=>[t,f(t)])))]};
 }
 
 export const A = [[10,-1,2,0],[-1,11,-1,3],[2,-1,10,-1],[0,3,-1,8]];

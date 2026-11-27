@@ -1,7 +1,7 @@
 import '@fontsource-variable/space-grotesk/wght.css';
 import '@fontsource-variable/inter/wght.css';
 import './style.css';
-import {MODULES,defaults,brakeAt,sampleAt} from '../../numerical_methods/models.js';
+import {MODULES,defaults,sensorSignal,brakeAt,sampleAt} from '../../numerical_methods/models.js';
 import {saveRun,listRuns,loadRun} from '../../database/history.js';
 import {createScene} from './scene.js';
 import {drawChart} from './chart.js';
@@ -159,7 +159,7 @@ function drawFrame(){
     drawFrame();changed();
   });
   q('runge')?.addEventListener('change',e=>{
-    s.params={...s.params,runge:e.target.checked,clustered:false,count:e.target.checked?11:3,edits:{}};
+    s.params={...s.params,runge:e.target.checked,tension:true,clustered:!e.target.checked&&s.scenario==='MAL CONDICIONADO',count:e.target.checked?11:defaults('sensors',s.scenario).count,edits:{}};
     drawFrame();changed();
   });
   q('reset-nodes')?.addEventListener('click',()=>{s.params={...s.params,edits:{}};changed(false);});
@@ -217,14 +217,15 @@ const metricInfo={
   brake:[['VELOCIDAD','m/s','gauge'],['RECORRIDO','m','route'],['TIEMPO','s','clock'],['DETENCIÓN TOTAL','m','brake']],
   wear:[['DETERIORO','','wear'],['UMBRAL','','point'],['TIEMPO','meses','clock'],['INSPECCIÓN','meses','route']],
   wind:[['DESPLAZAMIENTO','m','wind'],['VELOCIDAD LATERAL','m/s','gauge'],['TIEMPO','s','clock'],['FRECUENCIA NATURAL','rad/s','sensors']],
-  sensors:[['SEÑAL REAL','','sensors'],['LAGRANGE','','point'],['SPLINE','','route'],['MUESTRAS','','layers']],
+  sensors:[['REFERENCIA','','sensors'],['LAGRANGE','','point'],['SPLINE','','route'],['MUESTRAS','','layers']],
   solvers:[['ITERACIÓN','','clock'],['RESIDUO JACOBI','','solvers'],['RESIDUO GAUSS-SEIDEL','','solvers'],['RESIDUO CG','','solvers']],
   condition:[['CONDICIÓN κ₂','','condition'],['PERTURBACIÓN REL.','','point'],['CAMBIO REL.','','route'],['AMPLIFICACIÓN','×','solvers']]
 };
 const raceColors=['#ff9b62','#68d5df','#bdabff'];
 function displayResult(){
+  const tension=s.module==='sensors'&&s.result.unit==='kN';
   q('metrics').innerHTML=[...metricInfo[s.module],['ERROR ABSOLUTO','','info'],['RESIDUO / DEFECTO','','point']].map(([label,unit,symbol],i)=>
-    `<div class="metric panel" ${i>=4?'data-error-card hidden':''}><span class="metric-icon">${icon(symbol,17)}</span><div><div class="label">${label}</div><div class="metric-reading"><strong id="metric-${i}">—</strong><small>${unit}</small></div></div></div>`).join('');
+    `<div class="metric panel" ${i>=4?'data-error-card hidden':''}><span class="metric-icon">${icon(symbol,17)}</span><div><div class="label">${label}</div><div class="metric-reading"><strong id="metric-${i}">—</strong><small>${tension&&i!==3?'kN':unit}</small></div></div></div>`).join('');
   const r=s.result;
   q('timeline').max=r.end;
   q('time-end').textContent=timeLabel(r.end);
@@ -249,13 +250,13 @@ function drawStagePanel(){
 function drawGraph(){
   if(!s.result)return;
   const area=Boolean(s.integration), note=q('chart-note');
-  q('chart-title').textContent=area?'Refinamiento del área |x(t)|':titles[s.module][0];
+  q('chart-title').textContent=area?'Refinamiento del área |x(t)|':s.module==='sensors'&&s.result.gap?'Tensión del cable (kN) · Tiempo (s)':titles[s.module][0];
   chartView=drawChart(q('chart'),q('legend'),{...s});
   const text={
     brake:'Velocidad frente al tiempo. La fase de reacción conserva v₀.',
     wear:'Los puntos señalan los iterados de cada método. La línea vertical marca el mes de inspección.',
     wind:'El paso temporal controla el muestreo y el error de cada trayectoria.',
-    sensors:'Arrastra un nodo o muévelo con las flechas. Activa Modo Error para mostrar las muestras ocultas.',
+    sensors:s.result.gap?'Franja ámbar: lecturas perdidas. Activa Modo Error para ver sus valores de referencia.':'Arrastra los puntos o usa las flechas. Activa Modo Error para mostrar los valores ocultos.',
     solvers:'Escala logarítmica. El residuo se mide en norma infinito.',
     condition:'Épsilon se muestra en escala logarítmica. La matriz sigue siendo definida positiva.'
   }[s.module];
@@ -279,8 +280,9 @@ function updateRefinement(){
 function drawResults() {
   const r=s.result,m=r.methods[s.methodIndex]??r.methods[0];
   const e=m.metrics;
+  const readingUnit=s.module==='sensors'&&r.unit&&!Array.isArray(m.value)?' '+r.unit:'';
   const errorRows=s.showErrors ? `
-   <dt>Error absoluto</dt><dd>${format(e.abs,6)}</dd>
+   <dt>Error absoluto</dt><dd>${format(e.abs,6)}${readingUnit}</dd>
    <dt>Error relativo</dt><dd>${format(e.rel,6)}</dd>
    <dt>Error porcentual</dt><dd>${e.percent==null?'—':format(e.percent,6)+' %'}</dd>
    <dt>${['brake','wind'].includes(s.module)&&m.step!==null&&m.name.startsWith('RK')?'Defecto discreto':'Residuo'}</dt><dd>${format(e.res,6)}</dd>`:'';
@@ -292,7 +294,7 @@ function drawResults() {
   const status=m.converged===null?'':`<div class="result-status ${m.converged?'':'warning'}">${m.converged?'Convergió':'Límite de iteraciones alcanzado'}</div>`;
   q('results').innerHTML=`<div class="panel-head"><div><p class="label">VALIDACIÓN</p><h2>Resultados numéricos</h2></div><span class="tile-icon">${icon('gauge',18)}</span></div>
    <label class="compact-select method-select">Método<select id="method">${r.methods.map((x,i)=>`<option value="${i}" ${i===s.methodIndex?'selected':''}>${x.name}</option>`).join('')}</select></label>
-   <dl class="result-values"><dt>Aproximación</dt><dd>${format(m.value,4)}</dd><dt>Referencia</dt><dd>${format(m.reference,4)}</dd><dt>${s.module==='solvers'||s.module==='wear'?'Iteraciones':'Registros'}</dt><dd>${count||'—'}</dd>${brakeSummary}${solverSummary}${wearSummary}${windSummary}${m.step!==null?`<dt>Paso</dt><dd>${format(m.step,6)}</dd>`:''}${m.tolerance!==null?`<dt>Tolerancia</dt><dd>${format(m.tolerance,6)}</dd>`:''}${errorRows}</dl>
+   <dl class="result-values"><dt>Aproximación</dt><dd>${format(m.value,4)}${readingUnit}</dd><dt>Referencia</dt><dd>${format(m.reference,4)}${readingUnit}</dd><dt>${s.module==='solvers'||s.module==='wear'?'Iteraciones':'Registros'}</dt><dd>${count||'—'}</dd>${brakeSummary}${solverSummary}${wearSummary}${windSummary}${m.step!==null?`<dt>Paso</dt><dd>${format(m.step,6)}</dd>`:''}${m.tolerance!==null?`<dt>Tolerancia</dt><dd>${format(m.tolerance,6)}</dd>`:''}${errorRows}</dl>
    ${status}${m.criterion?`<p class="result-note">${m.criterion}</p>`:''}${m.interpretation?`<p class="result-note">${m.interpretation}</p>`:''}
    <details id="iterations" ${m.rows.length?'':'hidden'}><summary>Ver detalle numérico</summary><div class="iteration-scroll"><table><thead><tr><th>Índice</th><th>${m.rows.some(row=>row.n)?'n':'t'}</th><th>Valor</th><th>Residuo</th><th>Error abs.</th><th>Error rel.</th><th>Error %</th></tr></thead><tbody></tbody></table></div></details>
    <div class="result-actions"><button class="button" id="save">${icon('save',15)} Guardar</button><button class="button" id="csv" title="Exportar el detalle a CSV">${icon('download',14)} CSV</button><button class="button" id="pdf" title="Exportar el resumen a PDF">PDF</button></div>`;
@@ -308,7 +310,8 @@ function drawResults() {
 
 function timeLabel(t){
   const d=s.module==='solvers'?0:2;
-  return format(s.module==='solvers'?Math.floor(t):t,d)+(MODULES[s.module].unit?' '+MODULES[s.module].unit:' s');
+  const unit=s.module==='sensors'?(s.result?.timeUnit??(s.params.runge?'':'rad')):MODULES[s.module].unit||'s';
+  return format(s.module==='solvers'?Math.floor(t):t,d)+(unit?' '+unit:'');
 }
 function ordinates(lines,t) {
   return lines.map(line=>{
@@ -336,7 +339,7 @@ function updateHud(){
     state=p.force&&Math.abs(p.omega-r.natural)<0.15?'CERCA DE RESONANCIA':p.force?'OSCILACIÓN FORZADA':'OSCILACIÓN LIBRE';
   } else if(module==='sensors'){
     values=[...ordinates(r.lines.slice(0,3),r.a+t),r.nodes.length];
-    state=p.runge?'DEMOSTRACIÓN DE RUNGE':'MUESTRAS SINTÉTICAS';
+    state=p.runge?'DEMOSTRACIÓN DE RUNGE':r.gap?'TENSIÓN SIMULADA DEL CABLE':'MUESTRAS SINTÉTICAS';
   } else if(module==='solvers'){
     const k=Math.floor(t), now=r.methods.slice(0,3).map(m=>m.rows[k]??m.rows.at(-1));
     values=[k,...now.map(row=>row.res)];errorPoint=now[s.methodIndex]??errorPoint;
@@ -377,7 +380,12 @@ function moveNode(index,x,y){
   const r=s.result;if(s.module!=='sensors'||!r)return;
   const nodes=r.nodes, padding=(r.b-r.a)/200;
   x=index===0?r.a:index===nodes.length-1?r.b:Math.max(nodes[index-1][0]+padding,Math.min(nodes[index+1][0]-padding,x));
-  const ref=s.params.runge?1/(1+25*x*x):Math.sin(x);
+  if(r.gap){
+    const split=Math.floor(nodes.length/2);
+    if(index<split)x=Math.min(x,r.gap[0]);
+    else x=Math.max(x,r.gap[1]);
+  }
+  const ref=sensorSignal(s.params,x);
   const offset=Math.max(-1,Math.min(1,y-ref-s.params.noise*Math.sin(91*index+0.6)));
   s.params={...s.params,edits:{...s.params.edits,[index]:[x,offset]}};
   query();

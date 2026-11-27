@@ -21,10 +21,10 @@ export const CASE_NOTES={
     perturb:'Se aumenta el amortiguamiento en 0,1 N·s/m; se mide el cambio en el pico.'
   },
   sensors:{
-    label:'Error máximo Lagrange', model:'Señal sen(t) (t en radianes), ordenada y ruido adimensionales. Runge usa un dominio adimensional. Los tres interpolantes comparten nodos y se evalúan en muestras ocultas.',
+    label:'Error máximo Lagrange (kN)', model:'La tensión de referencia es un pulso sintético que alcanza 52 kN en t = 6 s. Los tres interpolantes comparten nodos y se evalúan dentro del intervalo sin datos. El modo Runge es adimensional.',
     numerical:'Lagrange y Newton representan el mismo polinomio con bases distintas; el spline natural usa tramos cúbicos. Un residuo pequeño en nodos puede acompañar un error grande entre ellos. La calibración auxiliar resuelve cuatro sesgos sintéticos conocidos en una matriz SPD.',
     physical:'La incertidumbre entre nodos depende del ruido y de su distribución. La prueba oculta mide el error de reconstrucción para una señal sintética conocida.',
-    perturb:'Se añade 0,001 a la ordenada del primer nodo. Se mide la mayor diferencia entre las dos reconstrucciones Lagrange en la malla de evaluación.'
+    perturb:'Se añade 0,001 kN a la lectura del primer nodo. Se mide la mayor diferencia entre las dos reconstrucciones Lagrange en la malla de evaluación.'
   }
 };
 

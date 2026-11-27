@@ -81,14 +81,14 @@ test('Integración compuesta y extrapolación de Romberg',()=>{
 });
 
 test('Informe §2.4: muestra oculta en π/4 y reconstrucción de nodos',()=>{
-  const r=calculate('sensors',defaults('sensors','NORMAL'));
+  const r=calculate('sensors',{noise:0,runge:false,clustered:false,count:3,edits:{}});
   near(r.test[0],Math.PI/4,1e-15);
   near(r.methods[0].value,0.75,1e-15);
   near(r.methods[0].metrics.abs,0.0428932,5e-8);
   const nodes=[[0,0],[0.42,0.8],[1.25,0.9],[1.9,0.22]];
   for(const f of [lagrange(nodes),spline(nodes)])for(const [x,y] of nodes)near(f(x),y,1e-14);
   assert.deepEqual(errors(0.1,0),{abs:0.1,rel:null,percent:null});
-  const runge=calculate('sensors',{...defaults('sensors','MAL CONDICIONADO'),clustered:false,count:11});
+  const runge=calculate('sensors',{...defaults('sensors','MAL CONDICIONADO'),runge:true,clustered:false,count:11});
   assert.ok(Math.max(...runge.lines[1].points.map(p=>p[1]))>1.5);
 });
 
@@ -106,5 +106,21 @@ test('Deterioro calibra los coeficientes escalados mediante los cuatro solvers S
   for(const m of r.methods.slice(3)){
     assert.ok(m.metrics.abs<1e-8);
     assert.ok(m.metrics.res<1e-8);
+  }
+});
+
+test('Sensor de tensión: oculta el pico sintético sin mezclar nodos con la validación',()=>{
+  for(const scenario of ['NORMAL','ESTRÉS','MAL CONDICIONADO']){
+    const r=calculate('sensors',defaults('sensors',scenario));
+    assert.equal(r.unit,'kN');
+    assert.equal(r.timeUnit,'s');
+    assert.equal(r.methods[0].reference,52);
+    assert.equal(r.methods[0].rows[0].t,6);
+    assert.ok(r.nodes.every(([t])=>t<=r.gap[0]||t>=r.gap[1]));
+    for(const m of r.methods.slice(0,3)){
+      assert.equal(m.rows.length,7);
+      assert.ok(m.rows.every(row=>row.t>r.gap[0]&&row.t<r.gap[1]&&Number.isFinite(row.abs)));
+    }
+    near(r.methods[0].value,r.methods[2].value,1e-9);
   }
 });

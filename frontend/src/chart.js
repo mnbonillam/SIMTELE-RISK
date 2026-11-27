@@ -1,4 +1,4 @@
-import {exactWind} from '../../numerical_methods/models.js';
+import {exactWind,sensorSignal} from '../../numerical_methods/models.js';
 
 const palette=['#ff9b62','#68d5df','#bdabff','#85dfaa','#b9cad6'];
 const w=840,h=230,l=61,r=19,g=19,b=33;
@@ -15,7 +15,7 @@ export function drawChart(svg,legend,input) {
 
   const all=lines.flatMap(line=>line.points).filter(p=>p.every(Number.isFinite));
   const min=Math.min(...all.map(p=>p[0])),max=Math.max(...all.map(p=>p[0]));
-  const bottom=Math.min(0,...all.map(p=>p[1])),top=Math.max(1e-8,...all.map(p=>p[1]));
+  const bottom=Math.min(result.gap?38:0,...all.map(p=>p[1])),top=Math.max(1e-8,...all.map(p=>p[1]));
   const mapX=v=>l+(w-l-r)*(v-min)/Math.max(1e-9,max-min);
   const mapY=v=>g+(h-g-b)*(top-v)/(top-bottom);
   const vertical=Array.from({length:6},(_,i)=>{
@@ -47,8 +47,12 @@ export function drawChart(svg,legend,input) {
     const points=lines[0].points;
     layer+=`<path fill="url(#signal-fill)" d="${poly(points,mapX,mapY)} L${mapX(points.at(-1)[0])},${mapY(bottom)} H${l}Z"/>`;
   }
+  if(result.gap){
+    const [a,b]=result.gap;
+    layer+=`<rect x="${mapX(a)}" y="${g}" width="${mapX(b)-mapX(a)}" height="${h-33-g}" fill="#f8dc9218"><title>Intervalo sin lecturas</title></rect>`;
+  }
   const sensorDots=(result.nodes??[]).map(([x,y],i)=>`<circle tabindex="0" role="button" aria-label="Nodo ${i+1}. Usa las flechas para moverlo" data-node="${i}" cx="${mapX(x)}" cy="${mapY(y)}" r="6" fill="#15212c" stroke="#f1f3fa" stroke-width="2"><title>Nodo ${i+1} · ${textNumber(x,3)}, ${textNumber(y,3)}</title></circle>`).join('');
-  const hidden=module==='sensors'&&showErrors ? result.test.map(x=>`<circle cx="${mapX(x)}" cy="${mapY(params.runge?1/(1+25*x*x):Math.sin(x))}" r="4" fill="none" stroke="#f8dc92"/>`).join('') : '';
+  const hidden=module==='sensors'&&showErrors ? result.test.map(x=>`<circle cx="${mapX(x)}" cy="${mapY(sensorSignal(params,x))}" r="4" fill="none" stroke="#f8dc92"/>`).join('') : '';
   const markers=(result.markers??[]).map((line,index)=>line.points.map(([x,y],i)=>
     `<circle cx="${mapX(x)}" cy="${mapY(y)}" r="${3+index}" fill="${colors[index+1]}" fill-opacity=".65"><title>${line.name} · iterado ${i+1} · ${textNumber(x,5)}</title></circle>`).join('')).join('');
   const cursor=module==='condition'||isArea?'':`<path d="M${mapX(Math.min(max,Math.max(min,module==='sensors'?t+min:t)))} ${g}V${h-b}" class="cursor-line"/>`;

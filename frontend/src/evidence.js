@@ -13,11 +13,12 @@ export function drawEvidence(section,state) {
   section.hidden=!note||!state.result;
   if(section.hidden)return;
   const r=state.result, p=state.params;
+  const sensorUnit=r.unit?' '+r.unit:'';
   const outcome={
     brake:()=>`Recorrido total: ${compact(r.distance)} m. ${r.distance>150?'Supera el límite ilustrativo por '+compact(r.distance-150)+' m.':'Margen hasta el límite ilustrativo: '+compact(150-r.distance)+' m.'}`,
     wear:()=>`Cruce del umbral: ${compact(r.inspection)} meses. Un mes después, D ≈ ${compact(p.initial+p.alpha*(r.inspection+1)+p.beta*(r.inspection+1)**2)}.`,
     wind:()=>`Pico analítico muestreado: ${compact(r.peak??Math.max(...r.lines[0].points.map(([,y])=>Math.abs(y))))} m.`,
-    sensors:()=>`Máximo error absoluto en muestras ocultas: Lagrange ${compact(Math.max(...r.methods[0].rows.map(row=>row.abs)))}; spline ${compact(Math.max(...r.methods[1].rows.map(row=>row.abs)))}.`
+    sensors:()=>`Máximo error absoluto en muestras ocultas: Lagrange ${compact(Math.max(...r.methods[0].rows.map(row=>row.abs)))}${sensorUnit}; spline ${compact(Math.max(...r.methods[1].rows.map(row=>row.abs)))}${sensorUnit}.`
   }[state.module]();
   const method=state.result.methods.filter(m=>m.rows.length>1&&m.rows.some(row=>Number.isFinite(row.abs)||Number.isFinite(row.res)));
   section.innerHTML=`

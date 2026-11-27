@@ -96,7 +96,7 @@ export const controls = {
   brake:[['v0','Velocidad inicial','m/s',2,16,0.1,'v₀'],['a','Desaceleración','m/s²',0.4,2.5,0.05,'a'],['reaction','Tiempo de reacción','s',0,4,0.1,'tᵣ']],
   wear:[['initial','Deterioro inicial','',0,0.5,0.01,'D₀'],['alpha','Tasa lineal','mes⁻¹',0.005,0.05,0.001,'α'],['beta','Tasa cuadrática','mes⁻²',0.0005,0.007,0.0001,'β'],['limit','Umbral de inspección','',0.2,0.8,0.01,'Dᵤ']],
   wind:[['force','Fuerza sinusoidal','N',0,40,1,'F'],['c','Amortiguamiento','N·s/m',5,120,1,'c'],['omega','Frecuencia de viento','rad/s',0.2,4,0.05,'ω'],['step','Paso temporal','s',0.05,0.9,0.01,'h'],['m','Masa equivalente','kg',180,450,5,'m'],['k','Rigidez','N/m',500,1800,10,'k']],
-  sensors:[['noise','Ruido de muestra','',0,0.3,0.005,'σ'],['count','Cantidad de nodos','',3,15,1,'n']],
+  sensors:[['noise','Amplitud del ruido','',0,0.3,0.005,'σ'],['count','Cantidad de nodos','',4,15,1,'n']],
   solvers:[['max','Máximo de iteraciones','',1,160,1,'kₘₐₓ']],
   condition:[['logE','Distancia a la singularidad','',-7,-1,0.05,'ε']]
 };
@@ -117,13 +117,13 @@ export function configMarkup(state) {
     brake:`<div class="config-note">${icon('info',15)} <span>El límite didáctico es <b>150 m</b> desde la orden de frenado.</span></div>`,
     wear:`<div class="config-note">${icon('info',15)} <span>En estrés, β aumenta y el umbral se alcanza antes.</span></div>`,
     wind:`<button class="inline-button" id="resonance">${icon('wind',15)} Ajustar cerca de resonancia</button>`,
-    sensors:`<label class="check"><input type="checkbox" id="runge" ${p.runge?'checked':''}> Demostración de Runge</label><button class="inline-button" id="reset-nodes">${icon('reset',15)} Restablecer nodos</button>`,
+    sensors:`<label class="check"><input type="checkbox" id="runge" ${p.runge?'checked':''}> Demostración de Runge</label>${p.tension&&!p.runge?'<small>Sensor simulado de fuerza en el anclaje. Las lecturas y la amplitud del ruido se expresan en kN.</small>':''}<button class="inline-button" id="reset-nodes">${icon('reset',15)} Restablecer nodos</button>`,
     solvers:`<label class="compact-select">Tolerancia relativa<select id="solver-tolerance">${[1e-8,1e-10,1e-12,1e-14].map(x=>`<option ${p.tolerance===x?'selected':''} value="${x}">${x}</option>`).join('')}</select></label>`,
     condition:`<div class="config-note">${icon('info',15)} <span>Δb = (+10⁻⁶, −10⁻⁶, 0, 0). Efecto matemático del sistema auxiliar.</span></div>`
   }[m];
   const primary={brake:'Frenar',wear:'Simular deterioro',wind:'Simular viento',sensors:'Reproducir señal',solvers:'Iniciar carrera',condition:'Aplicar perturbación'}[m];
   return `<div class="config-head"><span class="tile-icon">${icon('settings',18)}</span><div><h2>Parámetros</h2><p>MODELO DE SIMULACIÓN</p></div></div>
-    <div class="model-formula">${MODULES[m].equation}</div><div class="fields">${fields}${extra}${physicalFields}</div>
+    <div class="model-formula">${m==='sensors'?(p.runge?'Runge: 1 / (1 + 25t²)':p.tension?MODULES[m].equation:'y(t) = sen(t)'):MODULES[m].equation}</div><div class="fields">${fields}${extra}${physicalFields}</div>
     <div class="config-actions"><button id="run" class="primary">${icon(m==='brake'?'brake':'play',17)} ${primary}</button>
     <button id="slow" class="button" ${m!=='brake'?'hidden':''} aria-pressed="${state.rate===0.25}">Cámara lenta</button>
     <button id="reset-params" type="button" class="subtle">${icon('reset',14)} Restablecer valores</button></div>`;
